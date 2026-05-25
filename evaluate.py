@@ -1,7 +1,6 @@
 ﻿import os
 import json
 import re
-from dotenv import load_dotenv
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -11,8 +10,6 @@ from langsmith.run_helpers import traceable
 # ---------------------------
 # ENV
 # ---------------------------
-load_dotenv()
-
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
 
@@ -102,7 +99,8 @@ ANSWER:
             last_error = e
             print(f"Judge model failed: {model} -> {e}")
 
-            if e.status_code != 429:
+            status_code = get_client_error_status_code(e)
+            if status_code != 429:
                 break
         except Exception as e:
             last_error = e
@@ -112,6 +110,20 @@ ANSWER:
         "error": "Judge model failed",
         "reason": str(last_error)
     })
+
+def get_client_error_status_code(error: genai_errors.ClientError):
+    for attr in ("status_code", "code", "status"):
+        value = getattr(error, attr, None)
+        if isinstance(value, int):
+            return value
+
+    response = getattr(error, "response", None)
+    if response is not None:
+        value = getattr(response, "status_code", None)
+        if isinstance(value, int):
+            return value
+
+    return None
 
 def clean_json_text(text: str) -> str:
     text = text.strip()
