@@ -3,7 +3,6 @@ import json
 import re
 import streamlit as st
 from google import genai
-from google.genai import errors as genai_errors
 from langsmith import Client
 from langsmith.run_helpers import traceable
  
@@ -50,7 +49,7 @@ JUDGE_MODELS = [
 ]
  
 # ---------------------------
-# CORE FUNCTIONS (same as evaluate.py)
+# CORE FUNCTIONS
 # ---------------------------
 def generate_answer(prompt: str):
     for model in ANSWER_MODELS:
@@ -90,10 +89,6 @@ ANSWER:
         try:
             response = gemini.models.generate_content(model=model, contents=judge_prompt)
             return response.text
-        except genai_errors.ClientError as e:
-            last_error = e
-            if e.status_code != 429:
-                break
         except Exception as e:
             last_error = e
     return json.dumps({"error": "Judge model failed", "reason": str(last_error)})
@@ -134,7 +129,6 @@ st.title("🧠 Prompt Evaluation Framework")
 st.markdown("Evaluate LLM prompt responses using **Gemini** as the judge, tracked via **LangSmith**.")
 st.divider()
  
-# Prompt input section
 st.subheader("📝 Enter Prompts to Evaluate")
 default_prompts = (
     "Explain LangSmith in simple terms\n"
@@ -183,3 +177,4 @@ if run_btn:
                 st.error(f"Failed to evaluate prompt: {e}")
  
     st.success("✅ Evaluation complete! Results are also logged to LangSmith.")
+ 
