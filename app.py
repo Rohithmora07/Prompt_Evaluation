@@ -3,9 +3,10 @@ import json
 import re
 import streamlit as st
 from google import genai
+from groq import Groq
 from langsmith import Client
 from langsmith.run_helpers import traceable
- 
+
 # ---------------------------
 # PAGE CONFIG
 # ---------------------------
@@ -14,49 +15,41 @@ st.set_page_config(
     page_icon="🧠",
     layout="wide"
 )
- 
+
 # ---------------------------
-# LOAD KEYS (from Streamlit Secrets or env)
+# LOAD KEYS
 # ---------------------------
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
 LANGCHAIN_API_KEY = st.secrets.get("LANGCHAIN_API_KEY") or os.getenv("LANGCHAIN_API_KEY")
 
-if not GEMINI_API_KEY or not GROQ_API_KEY or not LANGCHAIN_API_KEY:
+if not GEMINI_API_KEY or not LANGCHAIN_API_KEY or not GROQ_API_KEY:
     st.error("❌ API keys missing. Add GEMINI_API_KEY, GROQ_API_KEY and LANGCHAIN_API_KEY in Streamlit Secrets.")
     st.stop()
 
 os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-os.environ["LANGCHAIN_TRACING_V2"] = st.secrets.get("LANGCHAIN_TRACING_V2", "true")
-os.environ["LANGCHAIN_PROJECT"] = st.secrets.get("LANGCHAIN_PROJECT", "llm-evaluation")
-os.environ["LANGSMITH_API_KEY"] = st.secrets.get("LANGSMITH_API_KEY", LANGCHAIN_API_KEY)
-os.environ["LANGSMITH_ENDPOINT"] = st.secrets.get("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
-os.environ["LANGSMITH_PROJECT"] = st.secrets.get("LANGSMITH_PROJECT", "Prompt-eval")
- 
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+
 # ---------------------------
 # CLIENTS
 # ---------------------------
 gemini = genai.Client(api_key=GEMINI_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY)
 ls_client = Client()
- 
+
 # ---------------------------
 # MODELS
 # ---------------------------
 ANSWER_MODELS = [
-    "models/gemini-2.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.5-flash-lite",
+    "models/gemini-2.5-flash",  # Only working Gemini model
 ]
-JUDGE_MODELS = [
-    "models/gemini-2.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.5-flash-lite",
-]
- 
+
+JUDGE_MODEL = "llama3-8b-8192"  # Groq — free, fast, reliable
+
 # ---------------------------
 # CORE FUNCTIONS
 # ---------------------------
-def generate_answer(prompt: str):
+def generate_answer(prompt: str) -> str:
     for model in ANSWER_MODELS:
         try:
             response = gemini.models.generate_content(model=model, contents=prompt)
@@ -64,17 +57,16 @@ def generate_answer(prompt: str):
         except Exception as e:
             st.warning(f"Model {model} failed: {e}")
     raise Exception("All answer models failed")
- 
- 
+
+
 def judge_answer(prompt: str, answer: str) -> str:
-    judge_prompt = f"""
-You are an evaluation system.
+    judge_prompt = f"""You are an evaluation system.
 Evaluate the answer based on:
 - correctness (0-10)
 - clarity (0-10)
 - completeness (0-10)
- 
-Return ONLY valid JSON. Do not wrap it in markdown code fences:
+
+Return ONLY valid JSON with no markdown fences:
 {{
   "correctness": int,
   "clarity": int,
@@ -82,23 +74,24 @@ Return ONLY valid JSON. Do not wrap it in markdown code fences:
   "total": int,
   "reason": string
 }}
- 
+
 QUESTION:
 {prompt}
- 
+
 ANSWER:
 {answer}
 """
-    last_error = None
-    for model in JUDGE_MODELS:
-        try:
-            response = gemini.models.generate_content(model=model, contents=judge_prompt)
-            return response.text
-        except Exception as e:
-            last_error = e
-    return json.dumps({"error": "Judge model failed", "reason": str(last_error)})
- 
- 
+    try:
+        response = groq_client.chat.completions.create(
+            model=JUDGE_MODEL,
+            messages=[{"role": "user", "content": judge_prompt}],
+            temperature=0,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return json.dumps({"error": "Judge model failed", "reason": str(e)})
+
+
 def clean_json_text(text: str) -> str:
     text = text.strip()
     fence_match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
@@ -109,31 +102,31 @@ def clean_json_text(text: str) -> str:
     if start != -1 and end != -1 and start < end:
         return text[start:end + 1]
     return text
- 
- 
+
+
 def parse_judge_output(text: str) -> dict:
     cleaned = clean_json_text(text)
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         return {"error": "Failed to parse judge output", "raw": text}
- 
- 
+
+
 @traceable(name="eval_run")
 def run_eval(prompt: str):
     answer = generate_answer(prompt)
     judge_raw = judge_answer(prompt, answer)
     judge = parse_judge_output(judge_raw)
     return {"prompt": prompt, "answer": answer, "judge": judge}
- 
- 
+
+
 # ---------------------------
 # UI
 # ---------------------------
 st.title("🧠 Prompt Evaluation Framework")
-st.markdown("Evaluate LLM prompt responses using **Gemini** as the judge, tracked via **LangSmith**.")
+st.markdown("Evaluate LLM prompt responses using **Gemini** as the answerer and **Groq (LLaMA3)** as the judge, tracked via **LangSmith**.")
 st.divider()
- 
+
 st.subheader("📝 Enter Prompts to Evaluate")
 default_prompts = (
     "Explain LangSmith in simple terms\n"
@@ -146,28 +139,29 @@ prompts_input = st.text_area(
     value=default_prompts,
     height=150
 )
- 
+
 run_btn = st.button("▶ Run Evaluation", type="primary", use_container_width=True)
- 
+
 if run_btn:
     prompts = [p.strip() for p in prompts_input.strip().splitlines() if p.strip()]
     if not prompts:
         st.warning("Please enter at least one prompt.")
         st.stop()
- 
+
     st.divider()
     st.subheader("📊 Results")
- 
+
     for i, prompt in enumerate(prompts):
         with st.spinner(f"Evaluating: *{prompt}*"):
             try:
                 result = run_eval(prompt)
                 judge = result["judge"]
- 
+
                 with st.expander(f"**{i+1}. {prompt}**", expanded=True):
-                    st.markdown("**🤖 Answer:**")
+                    st.markdown("**🤖 Answer:** *(by Gemini 2.5 Flash)*")
                     st.write(result["answer"])
- 
+
+                    st.markdown("**⚖️ Judgment:** *(by Groq LLaMA3)*")
                     if "error" in judge:
                         st.error(f"Judge error: {judge.get('reason', judge.get('raw', ''))}")
                     else:
@@ -177,9 +171,8 @@ if run_btn:
                         col3.metric("Completeness", f"{judge.get('completeness', '?')}/10")
                         col4.metric("Total", f"{judge.get('total', '?')}/30")
                         st.markdown(f"**💬 Reason:** {judge.get('reason', 'N/A')}")
- 
+
             except Exception as e:
                 st.error(f"Failed to evaluate prompt: {e}")
- 
+
     st.success("✅ Evaluation complete! Results are also logged to LangSmith.")
- 
