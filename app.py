@@ -19,14 +19,19 @@ st.set_page_config(
 # LOAD KEYS (from Streamlit Secrets or env)
 # ---------------------------
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
 LANGCHAIN_API_KEY = st.secrets.get("LANGCHAIN_API_KEY") or os.getenv("LANGCHAIN_API_KEY")
- 
-if not GEMINI_API_KEY or not LANGCHAIN_API_KEY:
-    st.error("❌ API keys missing. Add GEMINI_API_KEY and LANGCHAIN_API_KEY in Streamlit Secrets.")
+
+if not GEMINI_API_KEY or not GROQ_API_KEY or not LANGCHAIN_API_KEY:
+    st.error("❌ API keys missing. Add GEMINI_API_KEY, GROQ_API_KEY and LANGCHAIN_API_KEY in Streamlit Secrets.")
     st.stop()
- 
+
 os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_TRACING_V2"] = st.secrets.get("LANGCHAIN_TRACING_V2", "true")
+os.environ["LANGCHAIN_PROJECT"] = st.secrets.get("LANGCHAIN_PROJECT", "llm-evaluation")
+os.environ["LANGSMITH_API_KEY"] = st.secrets.get("LANGSMITH_API_KEY", LANGCHAIN_API_KEY)
+os.environ["LANGSMITH_ENDPOINT"] = st.secrets.get("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
+os.environ["LANGSMITH_PROJECT"] = st.secrets.get("LANGSMITH_PROJECT", "Prompt-eval")
  
 # ---------------------------
 # CLIENTS
