@@ -40,20 +40,18 @@ ls_client = Client()
 # ---------------------------
 # MODELS
 # ---------------------------
-ANSWER_MODELS = "llama3-8b-8192",  # Only working Gemini model
+ANSWER_MODEL = "llama3-8b-8192",  # Only working Gemini model
 JUDGE_MODEL = "llama3-8b-8192"  # Groq — free, fast, reliable
 
 # ---------------------------
 # CORE FUNCTIONS
 # ---------------------------
 def generate_answer(prompt: str) -> str:
-    for model in ANSWER_MODELS:
-        try:
-            response = gemini.models.generate_content(model=model, contents=prompt)
-            return response.text
-        except Exception as e:
-            st.warning(f"Model {model} failed: {e}")
-    raise Exception("All answer models failed")
+    response = groq_client.chat.completions.create(
+        model=ANSWER_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content
 
 
 def judge_answer(prompt: str, answer: str) -> str:
