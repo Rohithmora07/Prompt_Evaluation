@@ -40,8 +40,8 @@ ls_client = Client()
 # ---------------------------
 # MODELS
 # ---------------------------
-ANSWER_MODEL = "llama3-8b-8192"  # Only working Gemini model
-JUDGE_MODEL = "llama3-8b-8192"  # Groq — free, fast, reliable
+ANSWER_MODEL = "llama-3.1-8b-instant"
+JUDGE_MODEL = "llama-3.3-70b-versatile"
 
 # ---------------------------
 # CORE FUNCTIONS
