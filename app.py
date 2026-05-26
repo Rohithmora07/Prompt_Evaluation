@@ -40,10 +40,7 @@ ls_client = Client()
 # ---------------------------
 # MODELS
 # ---------------------------
-ANSWER_MODELS = [
-    "models/gemini-2.5-flash",  # Only working Gemini model
-]
-
+ANSWER_MODELS = "llama3-8b-8192",  # Only working Gemini model
 JUDGE_MODEL = "llama3-8b-8192"  # Groq — free, fast, reliable
 
 # ---------------------------
