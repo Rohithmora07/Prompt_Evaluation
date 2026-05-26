@@ -22,16 +22,8 @@ ls_client = Client()
 # ---------------------------
 # MODELS
 # ---------------------------
-ANSWER_MODELS = [
-    "models/gemini-2.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.5-flash-lite",
-]
-JUDGE_MODELS = [
-    "models/gemini-2.5-flash",
-    "models/gemini-2.0-flash",
-    "models/gemini-2.5-flash-lite",
-]
+ANSWER_MODEL = "llama3-8b-8192"      # Groq — answers
+JUDGE_MODEL = "llama3-70b-8192"      # Groq — judge (bigger/smarter)
 
 # ---------------------------
 # DATASET
